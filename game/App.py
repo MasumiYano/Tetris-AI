@@ -3,7 +3,6 @@ import sys
 import pygame as pygame
 
 from scenes.game.Game import Game
-# from scenes.menu.Menu import Menu
 
 
 class App:
@@ -37,4 +36,3 @@ class App:
 
     def start_game(self):
         self.scene = Game(self, self.screen)
-

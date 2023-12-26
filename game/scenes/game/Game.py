@@ -7,10 +7,8 @@ from pygame.event import Event
 from game.Controls import Controls
 from game.scenes.game.Block import Block
 from game.scenes.game.Board import Board
-# from game.scenes.game.GameOverMenu import GameOverMenu
 from game.scenes.game.HoldBox import HoldBox
 from game.scenes.game.NextBlocks import NextBlocks
-# from game.scenes.game.PauseMenu import PauseMenu
 from game.scenes.game.ScoreBoard import ScoreBoard
 
 
@@ -42,16 +40,12 @@ class Game:
         pygame.mixer.music.set_volume(0.05)
         pygame.mixer.music.play(-1)
 
-        # alt bölümler
         self.board = Board(self.screen, x=140, y=20, cell_size=32)
         self.hold_box = HoldBox(self.screen, x=4, y=84)
         self.next_blocks = NextBlocks(self.screen, self.board, x=460, y=84)
         self.active_block: Block = self.next_blocks.take_next()
         self.score_board = ScoreBoard(self.screen, x=300, y=740)
-        # self.pause_menu = PauseMenu(self.screen)
-        # self.game_over_menu = GameOverMenu(self.screen)
 
-        # durumlar
         self.gravity_counter = 0
         self.soft_drop = False
         self.left_pressed = False
@@ -66,10 +60,8 @@ class Game:
         self.game_over = False
 
     def update(self, events: List[Event]):
-        if self.paused:
-            self.handle_pause_events(events)
-        elif self.game_over:
-            self.handle_gameover_events(events)
+        if self.game_over:
+            self.app.start_game()
         else:
             for event in events:
                 if event.type == pygame.KEYDOWN:
@@ -103,7 +95,7 @@ class Game:
             if pygame.time.get_ticks() - self.last_spawn > 20000:
                 self.active_block.hard_drop()
 
-            if pygame.time.get_ticks() - self.last_movement > max(500, 17.1/self.get_gravity()):  #  16.66/gravity = satır başına ms
+            if pygame.time.get_ticks() - self.last_movement > max(500, 17.1/self.get_gravity()):
                 self.active_block.hard_drop()
 
             # Locking
@@ -152,10 +144,6 @@ class Game:
         self.hold_box.draw()
         self.next_blocks.draw()
         self.score_board.draw()
-        # if self.paused:
-        #     self.pause_menu.draw()
-        # elif self.game_over:
-        #     self.game_over_menu.draw()
 
     def get_gravity(self):
         return self.gravity_levels[self.score_board.level]
@@ -182,25 +170,3 @@ class Game:
         rotated = self.active_block.rotate_ccw()
         if rotated:
             self.last_movement = pygame.time.get_ticks()
-
-    def handle_pause_events(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    self.paused = False
-                    pygame.mixer.music.unpause()
-                    self.last_spawn += pygame.time.get_ticks() - self.last_pause
-                    self.last_movement += pygame.time.get_ticks() - self.last_pause
-            elif event.type == pygame.MOUSEBUTTONUP:
-                if self.pause_menu.resume_button.collidepoint(event.pos):
-                    self.paused = False
-                    pygame.mixer.music.unpause()
-                    self.last_spawn += pygame.time.get_ticks() - self.last_pause
-                    self.last_movement += pygame.time.get_ticks() - self.last_pause
-                elif self.pause_menu.menu_button.collidepoint(event.pos):
-                    self.app.start_menu()
-
-    def handle_gameover_events(self, events):
-        self.app.start_game()
-
-
