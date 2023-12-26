@@ -2,7 +2,7 @@ import sys
 
 import pygame as pygame
 
-from scenes.game.Game import Game
+from game.Game import Game
 
 
 class App:

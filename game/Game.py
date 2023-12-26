@@ -5,11 +5,11 @@ import pygame
 from pygame.event import Event
 
 from game.Controls import Controls
-from game.scenes.game.Block import Block
-from game.scenes.game.Board import Board
-from game.scenes.game.HoldBox import HoldBox
-from game.scenes.game.NextBlocks import NextBlocks
-from game.scenes.game.ScoreBoard import ScoreBoard
+from game.Block import Block
+from game.Board import Board
+from game.HoldBox import HoldBox
+from game.NextBlocks import NextBlocks
+from game.ScoreBoard import ScoreBoard
 
 
 class Game:
@@ -35,11 +35,6 @@ class Game:
             15: 2.36,
         }
 
-        # music
-        pygame.mixer.music.load('soundtrack.mp3')
-        pygame.mixer.music.set_volume(0.05)
-        pygame.mixer.music.play(-1)
-
         self.board = Board(self.screen, x=140, y=20, cell_size=32)
         self.hold_box = HoldBox(self.screen, x=4, y=84)
         self.next_blocks = NextBlocks(self.screen, self.board, x=460, y=84)
@@ -59,15 +54,17 @@ class Game:
         self.paused = False
         self.game_over = False
 
+        self.prev_line_cleared = 0
+
     def update(self, events: List[Event]):
-        if self.game_over:
-            self.app.start_game()
+        reward = 0
+        if self.game_over:  # so we could just return game_over for done value.
+            reward = -10
+            return reward, self.game_over, self.score_board.score
         else:
             for event in events:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        self.esc()  # pause
-                    elif event.key == Controls.hold:
+                    if event.key == Controls.hold:
                         self.hold()
                     elif event.key == Controls.rotate_cw:
                         self.rotate_cw()
@@ -101,16 +98,23 @@ class Game:
             # Locking
             if self.active_block.locked:
                 locked_out = self.board.add_block(self.active_block)
+                reward -= 0.1 * self.board.highest_column_height()
+                reward -= 1 * self.board.count_new_zeros()
                 lines_cleared = self.board.clear_lines()
+                # if agent clears more line than previous time, reward += 10
+                if self.prev_line_cleared < lines_cleared:
+                    reward += 10
+                self.prev_line_cleared = lines_cleared  # <-- swap the value of lines
                 self.active_block = self.next_blocks.take_next()
                 blocked_out = self.active_block.is_blocked_out()
                 self.last_movement = pygame.time.get_ticks()
                 self.last_spawn = pygame.time.get_ticks()
                 self.score_board.add_cleared_lines(lines_cleared)
                 if locked_out or blocked_out:
+                    reward = -10
                     self.game_over = True
                     pygame.mixer.music.pause()
-                    return
+                    return reward, self.game_over, self.score_board.score
 
             # gravity
             if self.gravity_counter >= 1:
@@ -121,8 +125,10 @@ class Game:
                         self.last_movement = pygame.time.get_ticks()
 
             if self.soft_drop:
+                reward += 2
                 self.gravity_counter += self.get_gravity()*20
             else:
+                reward += 5
                 self.gravity_counter += self.get_gravity()
 
             # right/left movement
@@ -137,6 +143,8 @@ class Game:
                         self.last_movement = pygame.time.get_ticks()
                 self.right_pressed_tick += 1
 
+            return reward, self.game_over, self.score_board.score
+
     def draw(self):
         self.board.draw()
         self.active_block.draw_ghost_piece()
@@ -147,11 +155,6 @@ class Game:
 
     def get_gravity(self):
         return self.gravity_levels[self.score_board.level]
-
-    def esc(self):
-        self.last_pause = pygame.time.get_ticks()
-        pygame.mixer.music.pause()
-        self.paused = True
 
     def hold(self):
         if self.hold_box.can_swap(self.active_block):

@@ -2,7 +2,7 @@ import random
 
 import pygame
 
-from game.scenes.game.Block import IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock
+from game.Block import IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock
 
 
 class NextBlocks:

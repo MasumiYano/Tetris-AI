@@ -1,0 +1,81 @@
+Todo.
+
+1. Game Reset Mechanism: <-- Call start_game on app.
+
+2. Reward System Implementation:  <-- Done.
+    Define a function to calculate rewards based on the actions taken and the state of the game.
+    This should include rewards for line clears, penalties for creating holes, and other aspects as per your reward structure.
+
+3. Play Function for Actions:
+    Develop a function that takes an action as input and applies it to the game.
+    This function should handle different actions (move left, move right, rotate, hard drop, soft drop, swap/hold) and update the game state accordingly.
+    Ensure this function also updates the game state representation after the action is taken.
+
+4. Track Game Iteration/Frame:
+    Maintain a counter for each frame or iteration of the game.
+    This helps in tracking the progress of the agent and is useful for debugging and analysis.
+
+5. Handle Game Over:
+    Detect when the game is over (e.g., when the pieces reach the top of the board).
+    Apply a penalty to the agent as part of the reward function.
+    Trigger the game reset mechanism.
+
+6. State Update and Action Decision:
+    After each action, update the state representation of the game.
+    The state should include the board configuration, current and next piece information, game statistics, etc.
+
+7. Learning Algorithm Integration:
+    Integrate the Q-learning algorithm to decide actions based on the current state.
+    The algorithm should update its policy based on the rewards received.
+
+8. Training Loop:
+    Create a loop where the agent continuously plays the game, making decisions based on its learning.
+    Use the rewards and game outcomes to update the Q-learning model.
+
+9. Performance Evaluation and Tuning:
+    Regularly evaluate the agent’s performance.
+    Adjust parameters (learning rate, exploration rate, etc.) and refine the model as needed.
+
+10. Logging and Monitoring:
+    Implement logging to monitor the agent's decisions, rewards, and game outcomes.
+    This is crucial for debugging and understanding how the agent learns over time.
+-------------Rewards, action, state-------------
+1. Rewards
+delete row = +10 <-- done
+game over = -10 <-- done
+hard drop = +5 <-- done
+soft drop = +2 <-- done
+create new hole = -1 * #'s of hole
+tallest col = -0.1 * #'s of row
+
+
+2. Action
+[1, 0, 0, 0, 0, 0, 0] → Straight Down (Soft Drop)
+[0, 1, 0, 0, 0, 0, 0] → Move Left
+[0, 0, 1, 0, 0, 0, 0] → Move Right
+[0, 0, 0, 1, 0, 0, 0] → Rotate Clockwise
+[0, 0, 0, 0, 1, 0, 0] → Rotate Counterclockwise
+[0, 0, 0, 0, 0, 1, 0] → Hard Drop
+[0, 0, 0, 0, 0, 0, 1] → Swap/Hold Piece
+
+3. State
+[
+    # Height of each column
+    0, 0, 2, 0, 5, 0, 0, 0, 0, 7,
+    # Number of holes
+    3,
+    # Bumpiness
+    16,
+    # Current piece type (one-hot encoded)
+    0, 0, 0, 0, 0, 1, 0,
+    # Piece rotation (one-hot encoded)
+    1, 0, 0, 0,
+    # X-coordinate of piece
+    3,
+    # Lines cleared
+    4,
+    # Total score
+    1500,
+    # Held piece type (one-hot encoded, assuming no piece is held initially)
+    0, 0, 0, 0, 0, 0, 0
+]

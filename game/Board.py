@@ -1,7 +1,14 @@
 import pygame
 from pygame import Color, Surface
 
-from game.scenes.game.Block import Block, ZBlock, TBlock, SBlock, IBlock, JBlock, LBlock, OBlock
+from game.Block import Block, ZBlock, TBlock, SBlock, IBlock, JBlock, LBlock, OBlock
+
+
+def is_line_full(line):
+    for i in line:
+        if i == 0:
+            return False
+    return True
 
 
 class Board:
@@ -25,8 +32,10 @@ class Board:
             6: TBlock.color,
             7: ZBlock.color
         }
+        self.prev_grid = self.grid
 
     def add_block(self, block: Block):
+        self.prev_grid = [row[:] for row in self.grid]
         lock_out = True
         block_grid = block.get_block_grid()
         for y in range(len(block_grid)):
@@ -37,11 +46,32 @@ class Board:
                         lock_out = False
         return lock_out
 
+    def highest_column_height(self):
+        max_height = float('-inf')
+        for col in range(10):
+            for row in range(20):
+                if self.grid[row][col] != 0:
+                    height = 20 - row
+                    max_height = max(max_height, height)
+                    break
+        return max_height
+
+    def count_new_zeros(self):
+        new_holes = 0
+        for col in range(10):
+            column_filled = False
+            for row in range(20):
+                if self.grid[row][col] != 0:
+                    column_filled = True
+                elif self.prev_grid[row][col] == 0 and column_filled:
+                    new_holes += 1
+        return new_holes
+
     def clear_lines(self):
         lines_cleared = 0
-        for line_no in range(len(self.grid)-1, -1, -1):
+        for line_no in range(len(self.grid) - 1, -1, -1):
             line = self.grid[line_no]
-            if self.is_line_full(line):
+            if is_line_full(line):
                 self.grid.pop(line_no)
                 lines_cleared += 1
 
@@ -49,12 +79,6 @@ class Board:
             self.grid.insert(0, [0 for _ in range(self.vertical_lines)])
 
         return lines_cleared
-
-    def is_line_full(self, line):
-        for i in line:
-            if i == 0:
-                return False
-        return True
 
     def draw(self):
         self.draw_grid_lines()
@@ -71,10 +95,10 @@ class Board:
 
     def draw_border(self):
         # Left border
-        pygame.draw.line(self.screen, "white", (self.x, self.y+64),
+        pygame.draw.line(self.screen, "white", (self.x, self.y + 64),
                          (self.x, self.grid_height + self.y), 2)
         # Right border
-        pygame.draw.line(self.screen, "white", (self.vertical_lines * self.cell_size + self.x, self.y+64),
+        pygame.draw.line(self.screen, "white", (self.vertical_lines * self.cell_size + self.x, self.y + 64),
                          (self.vertical_lines * self.cell_size + self.x, self.grid_height + self.y), 2)
         # Bottom border
         pygame.draw.line(self.screen, "white", (0 + self.x, self.horizontal_lines * self.cell_size + self.y),

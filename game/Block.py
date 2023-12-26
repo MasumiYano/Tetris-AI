@@ -73,7 +73,7 @@ class Block:
         temp_piece_grid = self.rotations[target_rotation_index]
         tests = self.rotation_test[self.rotation_index][target_rotation_index]
         for x, y in tests:
-            if self.can_move(self.grid_x+x, self.grid_y-y, temp_piece_grid):
+            if self.can_move(self.grid_x + x, self.grid_y - y, temp_piece_grid):
                 return x, -y
         return False
 
@@ -315,6 +315,7 @@ class SBlock(Block):
              [5, 5, 0, 0],
              [0, 5, 0, 0]],
         ]
+
 
 class TBlock(Block):
     color = pygame.Color("Orchid")
