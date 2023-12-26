@@ -3,7 +3,7 @@ import sys
 import pygame as pygame
 
 from scenes.game.Game import Game
-from scenes.menu.Menu import Menu
+# from scenes.menu.Menu import Menu
 
 
 class App:
@@ -15,7 +15,7 @@ class App:
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.scene = None
-        self.start_menu()
+        self.start_game()
 
     def run(self):
         while True:
@@ -25,7 +25,7 @@ class App:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-            # update
+            # # update
             self.scene.update(events)
 
             # draw
@@ -38,5 +38,3 @@ class App:
     def start_game(self):
         self.scene = Game(self, self.screen)
 
-    def start_menu(self):
-        self.scene = Menu(self, self.screen)

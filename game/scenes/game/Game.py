@@ -7,10 +7,10 @@ from pygame.event import Event
 from game.Controls import Controls
 from game.scenes.game.Block import Block
 from game.scenes.game.Board import Board
-from game.scenes.game.GameOverMenu import GameOverMenu
+# from game.scenes.game.GameOverMenu import GameOverMenu
 from game.scenes.game.HoldBox import HoldBox
 from game.scenes.game.NextBlocks import NextBlocks
-from game.scenes.game.PauseMenu import PauseMenu
+# from game.scenes.game.PauseMenu import PauseMenu
 from game.scenes.game.ScoreBoard import ScoreBoard
 
 
@@ -48,8 +48,8 @@ class Game:
         self.next_blocks = NextBlocks(self.screen, self.board, x=460, y=84)
         self.active_block: Block = self.next_blocks.take_next()
         self.score_board = ScoreBoard(self.screen, x=300, y=740)
-        self.pause_menu = PauseMenu(self.screen)
-        self.game_over_menu = GameOverMenu(self.screen)
+        # self.pause_menu = PauseMenu(self.screen)
+        # self.game_over_menu = GameOverMenu(self.screen)
 
         # durumlar
         self.gravity_counter = 0
@@ -152,10 +152,10 @@ class Game:
         self.hold_box.draw()
         self.next_blocks.draw()
         self.score_board.draw()
-        if self.paused:
-            self.pause_menu.draw()
-        elif self.game_over:
-            self.game_over_menu.draw()
+        # if self.paused:
+        #     self.pause_menu.draw()
+        # elif self.game_over:
+        #     self.game_over_menu.draw()
 
     def get_gravity(self):
         return self.gravity_levels[self.score_board.level]
@@ -201,9 +201,6 @@ class Game:
                     self.app.start_menu()
 
     def handle_gameover_events(self, events):
-        for event in events:
-            if event.type == pygame.MOUSEBUTTONUP:
-                if self.game_over_menu.menu_button.collidepoint(event.pos):
-                    self.app.start_menu()
+        self.app.start_game()
 
 
