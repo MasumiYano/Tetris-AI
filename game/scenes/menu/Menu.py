@@ -4,7 +4,7 @@ from typing import List
 import pygame
 from pygame.event import Event
 
-from Controls import Controls
+from game.Controls import Controls
 
 
 class Menu:

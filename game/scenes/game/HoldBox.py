@@ -1,6 +1,6 @@
 import pygame
 
-from scenes.game.Block import OBlock, IBlock
+from game.scenes.game.Block import OBlock, IBlock
 
 
 class HoldBox:

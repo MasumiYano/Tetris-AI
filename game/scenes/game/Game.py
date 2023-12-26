@@ -4,14 +4,14 @@ from typing import List
 import pygame
 from pygame.event import Event
 
-from Controls import Controls
-from scenes.game.Block import Block
-from scenes.game.Board import Board
-from scenes.game.GameOverMenu import GameOverMenu
-from scenes.game.HoldBox import HoldBox
-from scenes.game.NextBlocks import NextBlocks
-from scenes.game.PauseMenu import PauseMenu
-from scenes.game.ScoreBoard import ScoreBoard
+from game.Controls import Controls
+from game.scenes.game.Block import Block
+from game.scenes.game.Board import Board
+from game.scenes.game.GameOverMenu import GameOverMenu
+from game.scenes.game.HoldBox import HoldBox
+from game.scenes.game.NextBlocks import NextBlocks
+from game.scenes.game.PauseMenu import PauseMenu
+from game.scenes.game.ScoreBoard import ScoreBoard
 
 
 class Game:

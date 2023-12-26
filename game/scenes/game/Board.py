@@ -1,7 +1,7 @@
 import pygame
 from pygame import Color, Surface
 
-from scenes.game.Block import Block, ZBlock, TBlock, SBlock, IBlock, JBlock, LBlock, OBlock
+from game.scenes.game.Block import Block, ZBlock, TBlock, SBlock, IBlock, JBlock, LBlock, OBlock
 
 
 class Board:
