@@ -12,7 +12,7 @@ class NextBlocks:
         self.x = x
         self.y = y
         self.box = pygame.Rect(x, y, 136, 512)
-        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 24)
+        self.font = pygame.font.Font("game/PressStart2P-Regular.ttf", 24)
         self.text = self.font.render("Next", True, "white")
         self.bag = self.create_new_bag()
         self.next_blocks = [self.take_next_from_bag() for _ in range(4)]

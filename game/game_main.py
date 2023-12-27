@@ -25,13 +25,12 @@ class Movement(Enum):
 class TetrisAI:
     def __init__(self):
         pygame.init()
-        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 32)
+        self.font = pygame.font.Font("game/PressStart2P-Regular.ttf", 32)
         self.screen_width = 600
         self.screen_height = 900
         pygame.display.set_caption("TETRIS")
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill("black")
-        pygame.display.flip()
         self.clock = pygame.time.Clock()
         self.clock.tick(60)
         self.gravity_levels = {
@@ -141,7 +140,14 @@ class TetrisAI:
                     self.last_movement = pygame.time.get_ticks()
             self.right_pressed_tick += 1
 
+        self._update_ui()
+        self.clock.tick(40)
         return reward, self.game_over, self.score_board.score
+
+    def _update_ui(self):
+        self.screen.fill("black")
+        self.draw()
+        pygame.display.update()
 
     def draw(self):
         self.board.draw()
@@ -205,7 +211,7 @@ class TetrisAI:
             case Movement.MOVE_RIGHT:
                 self.right_pressed_tick = 0
                 self.right_pressed = True
-            case Movement.ROTATE_CW():
+            case Movement.ROTATE_CW:
                 self.rotate_cw()
             case Movement.ROTATE_CCW:
                 self.rotate_ccw()

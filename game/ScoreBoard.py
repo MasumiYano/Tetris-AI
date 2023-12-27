@@ -9,7 +9,7 @@ class ScoreBoard:
         self.score = 0
         self.level = 5
         self.lines_cleared = 0
-        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 24)
+        self.font = pygame.font.Font("game/PressStart2P-Regular.ttf", 24)
         self.score_text = self.font.render("Score", True, "white")
         self.level_text = self.font.render("Level", True, "white")
 

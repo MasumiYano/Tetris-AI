@@ -1,5 +1,7 @@
 # Importing form library
 import random
+
+import pygame.display
 import torch
 import numpy as np
 from collections import deque
@@ -9,7 +11,6 @@ from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
 from model import LinearQNet, QTrainer
 from helper import plot
-
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -74,7 +75,7 @@ class Agent:
         x_coordinate = game.active_block.grid_x
         lines_cleared = game.prev_line_cleared
         total_score = game.score_board.score
-        hold_piece_type = game.hold_box.block
+        hold_piece_type = block_type(game.hold_box.block)
 
         state = [
             height, holes, bumpiness, current_piece,
@@ -83,7 +84,6 @@ class Agent:
         ]
 
         flatten_state = flatten_array(state)
-
         return np.array(flatten_state, dtype=int)
 
     def remember(self, state, action, reward, next_state, game_over):
@@ -117,7 +117,6 @@ class Agent:
         return final_move
 
 
-
 def train():
     plot_scores = []
     plot_mean_score = []
@@ -144,13 +143,14 @@ def train():
                 record = score
                 agent.model.save()
 
-            print(f'GAME: {agent.n_games}\n SCORE: {score}\n BEST SCORE: {record}')
+            print(f'GAME: {agent.n_games}\nSCORE: {score}\nBEST SCORE: {record}')
 
             plot_scores.append(score)
             total_score += score
-            mean_score = total_score/agent.n_games
+            mean_score = total_score / agent.n_games
             plot_mean_score.append(mean_score)
             plot(plot_scores, plot_mean_score)
+
 
 if __name__ == '__main__':
     train()

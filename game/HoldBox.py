@@ -8,7 +8,7 @@ class HoldBox:
         self.screen: pygame.Surface = screen
         self.x = x
         self.y = y
-        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 24)
+        self.font = pygame.font.Font("game/PressStart2P-Regular.ttf", 24)
         self.box = pygame.Rect(x, y, 136, 128)
         self.text = self.font.render("Hold", True, "white")
         self.block = None
