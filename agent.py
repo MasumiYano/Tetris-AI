@@ -3,11 +3,13 @@ import random
 import torch
 import numpy as np
 from collections import deque
-from functools import reduce
 
 # Importing from folder
-from game.game_main import TetrisAI, Movement
+from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
+from model import LinearQNet, QTrainer
+from helper import plot
+
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -60,7 +62,8 @@ class Agent:
         self.epsilon = 0
         self.gamma = 0.9
         self.memory = deque(maxlen=MAX_MEMORY)
-        # TODO: model, trainer
+        self.model = LinearQNet(33, 256, 7)
+        self.trainer = QTrainer(self.model, learning_rate=LR, gamma=self.gamma)
 
     def get_state(self, game):
         height = game.get_board_height()
@@ -94,7 +97,7 @@ class Agent:
             mini_sample = self.memory
 
         states, actions, rewards, next_steps, dones = zip(*mini_sample)
-        self.trainer(states, actions, rewards, next_steps, dones)
+        self.trainer.train_step(states, actions, rewards, next_steps, dones)
 
     def train_short_memory(self, state, action, reward, next_state, game_over):
         self.trainer.train_step(state, action, reward, next_state, game_over)
@@ -142,3 +145,12 @@ def train():
                 agent.model.save()
 
             print(f'GAME: {agent.n_games}\n SCORE: {score}\n BEST SCORE: {record}')
+
+            plot_scores.append(score)
+            total_score += score
+            mean_score = total_score/agent.n_games
+            plot_mean_score.append(mean_score)
+            plot(plot_scores, plot_mean_score)
+
+if __name__ == '__main__':
+    train()
