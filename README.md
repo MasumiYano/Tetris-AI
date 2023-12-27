@@ -145,4 +145,3 @@ MIT License Obtained.
 
 ## Contact
 - Email: masumi76@uw.edu
-- Tel: 253-455-9779
