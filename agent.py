@@ -10,7 +10,7 @@ from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
 from model import LinearQNet, QTrainer
 from helper import plot
-from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA)
+from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPTERPRAMETER_EXPLORATION_RATE)
 
 
 def calculate_bumpiness(arr):
@@ -99,9 +99,9 @@ class Agent:
         self.trainer.train_step(state, action, reward, next_state, game_over)
 
     def get_action(self, state):
-        self.epsilon = 80 - self.n_games
+        self.epsilon = HYPTERPRAMETER_EXPLORATION_RATE - (self.n_games ** 2 / 200)
         final_move = [0, 0, 0, 0, 0, 0, 0]
-        if random.randint(0, 200) < self.epsilon:
+        if random.randint(0, 300) < self.epsilon:
             move = random.randint(0, 6)
             final_move[move] = 1
         else:
