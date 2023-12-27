@@ -1,26 +1,26 @@
 Todo.
 
-1. Game Reset Mechanism: <-- Call start_game on app.
+1. TetrisAI Reset Mechanism: <-- Call start_game on app.
 
 2. Reward System Implementation:  <-- Done.
     Define a function to calculate rewards based on the actions taken and the state of the game.
     This should include rewards for line clears, penalties for creating holes, and other aspects as per your reward structure.
 
-3. Play Function for Actions:
+3. Play Function for Actions: <-- Done.
     Develop a function that takes an action as input and applies it to the game.
     This function should handle different actions (move left, move right, rotate, hard drop, soft drop, swap/hold) and update the game state accordingly.
     Ensure this function also updates the game state representation after the action is taken.
 
-4. Track Game Iteration/Frame:
+4. Track TetrisAI Iteration/Frame: <-- Done.
     Maintain a counter for each frame or iteration of the game.
     This helps in tracking the progress of the agent and is useful for debugging and analysis.
 
-5. Handle Game Over:
+5. Handle TetrisAI Over: <-- Done.
     Detect when the game is over (e.g., when the pieces reach the top of the board).
     Apply a penalty to the agent as part of the reward function.
     Trigger the game reset mechanism.
 
-6. State Update and Action Decision:
+6. State Update and Action Decision: <-- Done.
     After each action, update the state representation of the game.
     The state should include the board configuration, current and next piece information, game statistics, etc.
 
