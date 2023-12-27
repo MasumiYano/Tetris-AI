@@ -55,6 +55,7 @@ class TetrisAI:
         self.reset()
 
     def reset(self):
+        self.accumulated_reward = 0
         self.gravity_counter = 0
         self.soft_drop = False
         self.left_pressed = False
@@ -88,37 +89,43 @@ class TetrisAI:
         self._move(action)
 
         # Lock delays and hard drop handling
-        if pygame.time.get_ticks() - self.last_spawn > 20000 or pygame.time.get_ticks() - self.last_movement > max(500, 17.1 / self.get_gravity()):
+        if pygame.time.get_ticks() - self.last_spawn > 20000 or pygame.time.get_ticks() - self.last_movement > max(500,
+                                                                                                                   17.1 / self.get_gravity()):
             self.active_block.hard_drop()
 
-        # Initialize reward
-        reward = 0
+        # Initialize or continue accumulating reward
+        if not hasattr(self, 'accumulated_reward'):
+            self.accumulated_reward = 0
 
         # Locking the block and checking for game over
         if self.active_block.locked:
             locked_out = self.board.add_block(self.active_block)
 
-            # Apply penalties for column height and new zeros
-            # reward -= 0.1 * self.board.highest_column_height()
-            reward -= 1 * self.board.count_new_zeros()
-
             # Check lines cleared before spawning new block
             lines_cleared = self.board.clear_lines()
             if lines_cleared != 0:
-                reward += 700 + self.score_board.score
+                # Add reward for line clearing
+                self.score_board.add_cleared_lines(lines_cleared)
+                self.accumulated_reward += self.score_board.score / 5
 
             self.active_block = self.next_blocks.take_next()
             blocked_out = self.active_block.is_blocked_out()
 
             self.last_movement = pygame.time.get_ticks()
             self.last_spawn = pygame.time.get_ticks()
-            self.score_board.add_cleared_lines(lines_cleared)
 
             if locked_out or blocked_out:
                 self.game_over = True
-                return -500 + reward, self.game_over, self.score_board.score
+                # Add penalties for game over
+                self.accumulated_reward -= 10
+                self.accumulated_reward -= 0.1 * self.board.highest_column_height()
+                self.accumulated_reward -= 0.5 * self.board.count_new_zeros()
+                # Return final accumulated reward and reset for next game
+                final_reward = self.accumulated_reward
+                self.accumulated_reward = 0
+                return final_reward, self.game_over, self.score_board.score
 
-        # Gravity handling
+
         if self.gravity_counter >= 1:
             gravity_floor = math.floor(self.gravity_counter)
             self.gravity_counter -= gravity_floor
@@ -132,11 +139,13 @@ class TetrisAI:
             self.gravity_counter += self.get_gravity()
 
         # Right/left movement handling
-        if self.left_pressed and (self.left_pressed_tick > 6 or self.left_pressed_tick == 0) and self.left_pressed_tick % 2 == 0:
+        if self.left_pressed and (
+                self.left_pressed_tick > 6 or self.left_pressed_tick == 0) and self.left_pressed_tick % 2 == 0:
             if self.active_block.move_left():
                 self.last_movement = pygame.time.get_ticks()
             self.left_pressed_tick += 1
-        if self.right_pressed and (self.right_pressed_tick > 6 or self.right_pressed_tick == 0) and self.right_pressed_tick % 2 == 0:
+        if self.right_pressed and (
+                self.right_pressed_tick > 6 or self.right_pressed_tick == 0) and self.right_pressed_tick % 2 == 0:
             if self.active_block.move_right():
                 self.last_movement = pygame.time.get_ticks()
             self.right_pressed_tick += 1
@@ -145,8 +154,7 @@ class TetrisAI:
         self._update_ui()
         self.clock.tick(FPS)
 
-        return reward, self.game_over, self.score_board.score
-
+        return self.accumulated_reward, self.game_over, self.score_board.score
 
     def _update_ui(self):
         self.screen.fill("black")
