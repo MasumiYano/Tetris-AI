@@ -85,10 +85,6 @@ class TetrisAI:
                 quit()
 
         reward = 0
-        if self.game_over:
-            reward = -10
-            return reward, self.game_over, self.score_board.score
-
         self._move(action)
 
         # Lock delays
@@ -217,3 +213,9 @@ class TetrisAI:
                 self.active_block.hard_drop()
             case Movement.HOLD:
                 self.hold()
+
+    def get_board_height(self):
+        return self.board.get_height()
+
+    def get_holes(self):
+        return self.board.count_new_zeros()

@@ -56,6 +56,14 @@ class Board:
                     break
         return max_height
 
+    def get_height(self):
+        heights = [0] * len(self.grid[0])
+        for col in range(10):
+            for row in range(20):
+                if self.grid[row][col] != 0:
+                    heights[col] += 1
+        return heights
+
     def count_new_zeros(self):
         new_holes = 0
         for col in range(10):
