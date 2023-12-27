@@ -55,10 +55,11 @@ To use the Tetris-AI, follow these steps:
 ### Configuration
 - You can adjust the AI's settings by going `config.py`
 - Available options include:
-- **Learning Rate**: Controls how quickly the AI adapts to new patterns.
-- **Batch Size**: Number of training example used in one iteration of model training.
-- **FPS**: How fast the screen refreshes.
-- **Gamma**: Discount factor. Determines the importance of future rewards in the AI's decision-making process.
+  1. **Learning Rate**: Controls how quickly the AI adapts to new patterns.
+  2. **Batch Size**: Number of training example used in one iteration of model training.
+  3. **FPS**: How fast the screen refreshes.
+  4. **Gamma**: Discount factor. Determines the importance of future rewards in the AI's decision-making process.
+  5. **Hyperparameter for exploration rate**: Hyperparameter for exploration rate. 
 
 ### Interacting with an AI
 - Once running, the AI will automatically start playing Tetris.
