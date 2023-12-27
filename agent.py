@@ -1,7 +1,6 @@
 # Importing form library
 import random
 
-import pygame.display
 import torch
 import numpy as np
 from collections import deque
@@ -11,10 +10,7 @@ from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
 from model import LinearQNet, QTrainer
 from helper import plot
-
-MAX_MEMORY = 100_000
-BATCH_SIZE = 1000
-LR = 0.001
+from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA)
 
 
 def calculate_bumpiness(arr):
@@ -61,7 +57,7 @@ class Agent:
     def __init__(self):
         self.n_games = 0
         self.epsilon = 0
-        self.gamma = 0.9
+        self.gamma = GAMMA
         self.memory = deque(maxlen=MAX_MEMORY)
         self.model = LinearQNet(33, 256, 7)
         self.trainer = QTrainer(self.model, learning_rate=LR, gamma=self.gamma)
@@ -103,7 +99,7 @@ class Agent:
         self.trainer.train_step(state, action, reward, next_state, game_over)
 
     def get_action(self, state):
-        self.epsilon = 80 - self.n_games
+        self.epsilon = 100 - self.n_games
         final_move = [0, 0, 0, 0, 0, 0, 0]
         if random.randint(0, 200) < self.epsilon:
             move = random.randint(0, 6)
@@ -143,7 +139,7 @@ def train():
                 record = score
                 agent.model.save()
 
-            print(f'GAME: {agent.n_games}\nSCORE: {score}\nBEST SCORE: {record}')
+            print(f'GAME: {agent.n_games}\nSCORE: {score}\nBEST SCORE: {record}\nREWARD: {reward}')
 
             plot_scores.append(score)
             total_score += score

@@ -45,22 +45,19 @@ class QTrainer:
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
-            done = (done, )  # <-- tuple with one element. Looks like (0, 0, 0, 0, 1) where 0 means it's not game over, and 1 means game over.
+            done = (done, )
 
         # 1. Predicted Q values with current state
-        pred = self.model(state)  # <-- here state is neural network. pred is a tensor Q-values corresponding to each action.
-        target = pred.clone()  # <-- here we cloned the pred because we want to use to calculate the loss for updating the model without affection pred.
+        pred = self.model(state)
+        target = pred.clone()
 
         # 2. Q_new = reward + gamma * max(next_predicted_Q_value) <-- only do this if not done.
         # here idx represents state within each game.
-        for idx in range(len(done)):  # <-- The done tensor indicates whether each state is terminal. (The end of an episode in the environment.)
-            Q_new = reward[idx]  # <-- Setup the updated Q-value for state-action pair. Initially, just reward. If the game play is terminal, it ends here.
-            if not done[idx]:  # <-- Checks if the current state is terminal.
-                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))  # <-- If the game play was not terminal, then we update the Q-value by doing this.
+        for idx in range(len(done)):
+            Q_new = reward[idx]
+            if not done[idx]:
+                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
 
-            # target[idx][torch.argmax(action).item()] indexing into the target tensor. Selects the Q-value corresponding to action taken at state idx.
-            # Update the action by Q_new. Q_new based on reward received and the predicted future rewards (if tensor is non-terminal)
-            # The purpose of it is to align the predicted Q-values with the observed rewards and the estimated future rewards.
             # THIS IS WHERE LEARNING HAPPENS!!!!!!!!!!
             target[idx][torch.argmax(action).item()] = Q_new
 
