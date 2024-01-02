@@ -59,7 +59,7 @@ class Agent:
         self.epsilon = 0
         self.gamma = GAMMA
         self.memory = deque(maxlen=MAX_MEMORY)
-        self.model = LinearQNet(33, 256, 7)
+        self.model = LinearQNet(33, 590, 7)
         self.trainer = QTrainer(self.model, learning_rate=LR, gamma=self.gamma)
 
     def get_state(self, game):
