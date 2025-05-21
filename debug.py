@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from game.game_main import TetrisAI
-from .agent import create_board_tensor, block_type
+from agent import create_board_tensor, block_type
 
 def visualize_board_tensor(game, save_path=None):
     """Visualize the 4-channel board tensor to debug visual state extraction"""

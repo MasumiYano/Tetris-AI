@@ -2,35 +2,41 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import numpy as np
 import os
 
 
 class ConvQNet(nn.Module):
     def __init__(self, additional_features_size=17, output_size=7):
         super().__init__()
+        # CNN layers for board analysis (input: 4 channels, 22x10 board)
         self.conv1 = nn.Conv2d(4, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-
-        cnn_output_size = 64*22*10
-
+        
+        # Calculate flattened CNN output size: 64 * 22 * 10 = 14,080
+        cnn_output_size = 64 * 22 * 10
+        
+        # Fully connected layers
         self.fc1 = nn.Linear(cnn_output_size + additional_features_size, 512)
         self.fc2 = nn.Linear(512, output_size)
-
-
+        
     def forward(self, board_tensor, additional_features):
+        # CNN processing
         x = F.relu(self.conv1(board_tensor))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-
-        x = x.view(x.size(0),-1)
-
+        
+        # Flatten CNN output
+        x = x.view(x.size(0), -1)
+        
+        # Combine with additional features
         if additional_features is not None:
             x = torch.cat([x, additional_features], dim=1)
-
+        
+        # Final fully connected layers
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-
         return x
 
     def save(self, file_name='conv_model.pth'):
@@ -40,6 +46,7 @@ class ConvQNet(nn.Module):
 
         file_name = os.path.join(model_folder_path, file_name)
         torch.save(self.state_dict(), file_name)
+
 
 class LinearQNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -73,8 +80,9 @@ class QTrainer:
     def train_step(self, state, action, reward, next_state, done):
         if self.is_conv_model:
             # Handle ConvQNet with visual states
-            if isinstance(state, tuple):
-                # Single experience
+            # Check if this is a single experience or batch
+            if isinstance(state, tuple) and len(state) == 2 and isinstance(state[0], np.ndarray):
+                # Single experience: state is (board_tensor, features)
                 board_tensor, features = state
                 next_board_tensor, next_features = next_state
                 
@@ -86,14 +94,14 @@ class QTrainer:
                 reward = torch.tensor(reward, dtype=torch.float).unsqueeze(0)
                 done = (done,)
             else:
-                # Batch of experiences
+                # Batch of experiences: state is tuple of (board_tensor, features) tuples
                 board_tensors, features_list = zip(*state)
                 next_board_tensors, next_features_list = zip(*next_state)
                 
-                board_tensor = torch.tensor(board_tensors, dtype=torch.float)
-                features = torch.tensor(features_list, dtype=torch.float)
-                next_board_tensor = torch.tensor(next_board_tensors, dtype=torch.float)
-                next_features = torch.tensor(next_features_list, dtype=torch.float)
+                board_tensor = torch.tensor(np.array(board_tensors), dtype=torch.float)
+                features = torch.tensor(np.array(features_list), dtype=torch.float)
+                next_board_tensor = torch.tensor(np.array(next_board_tensors), dtype=torch.float)
+                next_features = torch.tensor(np.array(next_features_list), dtype=torch.float)
                 action = torch.tensor(action, dtype=torch.long)
                 reward = torch.tensor(reward, dtype=torch.float)
                 
@@ -109,9 +117,9 @@ class QTrainer:
                         # Single experience
                         Q_new = reward[idx] + self.gamma * torch.max(self.model(next_board_tensor, next_features))
                     else:
-                        # Batch experience
-                        next_board_single = next_board_tensor[idx].unsqueeze(0)
-                        next_features_single = next_features[idx].unsqueeze(0)
+                        # Batch experience - need to handle this more carefully
+                        next_board_single = next_board_tensor[idx:idx+1]  # Keep batch dimension
+                        next_features_single = next_features[idx:idx+1]   # Keep batch dimension
                         Q_new = reward[idx] + self.gamma * torch.max(self.model(next_board_single, next_features_single))
                 
                 target[idx][torch.argmax(action[idx]).item()] = Q_new
