@@ -9,23 +9,29 @@ import os
 class ConvQNet(nn.Module):
     def __init__(self, additional_features_size=17, output_size=7):
         super().__init__()
-        # CNN layers for board analysis (input: 4 channels, 22x10 board)
+        # Improved CNN architecture with batch norm and pooling
         self.conv1 = nn.Conv2d(4, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(128)
         
-        # Calculate flattened CNN output size: 64 * 22 * 10 = 14,080
-        cnn_output_size = 64 * 22 * 10
+        # Calculate flattened CNN output size: 128 * 22 * 10 = 28,160
+        cnn_output_size = 128 * 22 * 10
         
-        # Fully connected layers
-        self.fc1 = nn.Linear(cnn_output_size + additional_features_size, 512)
-        self.fc2 = nn.Linear(512, output_size)
+        # Improved fully connected layers with dropout
+        self.fc1 = nn.Linear(cnn_output_size + additional_features_size, 1024)
+        self.dropout1 = nn.Dropout(0.2)
+        self.fc2 = nn.Linear(1024, 512)
+        self.dropout2 = nn.Dropout(0.2)
+        self.fc3 = nn.Linear(512, output_size)
         
     def forward(self, board_tensor, additional_features):
-        # CNN processing
-        x = F.relu(self.conv1(board_tensor))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        # Improved CNN processing with batch norm
+        x = F.relu(self.bn1(self.conv1(board_tensor)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
         
         # Flatten CNN output
         x = x.view(x.size(0), -1)
@@ -34,9 +40,12 @@ class ConvQNet(nn.Module):
         if additional_features is not None:
             x = torch.cat([x, additional_features], dim=1)
         
-        # Final fully connected layers
+        # Improved fully connected layers with dropout
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = self.dropout1(x)
+        x = F.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
         return x
 
     def save(self, file_name='conv_model.pth'):

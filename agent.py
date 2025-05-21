@@ -1,5 +1,5 @@
-# Importing form library
-import random
+# Add imports at the top
+from reward_system import calculate_board_features, calculate_tetris_reward
 
 import torch
 import numpy as np
@@ -137,16 +137,59 @@ class Agent:
         self.use_cnn = use_cnn
         
         if use_cnn:
-            # Use new CNN model
+            # Use new CNN model with lower learning rate
             self.model = ConvQNet(additional_features_size=17, output_size=7)
+            # Use CNN-specific learning rate if available, otherwise use main LR
+            try:
+                from config import CNN_LR
+                lr = CNN_LR
+            except ImportError:
+                lr = LR
         else:
             # Use original linear model for comparison
             from model import LinearQNet
             self.model = LinearQNet(33, 590, 7)
+            # Use Linear-specific learning rate if available, otherwise use main LR
+            try:
+                from config import LINEAR_LR
+                lr = LINEAR_LR
+            except ImportError:
+                lr = LR
             
-        self.trainer = QTrainer(self.model, learning_rate=LR, gamma=self.gamma)
+        self.trainer = QTrainer(self.model, learning_rate=lr, gamma=self.gamma)
 
-    def get_state(self, game):
+    def get_reward(self, game, lines_cleared, game_over):
+        """Calculate reward using improved reward shaping"""
+        if self.use_cnn:
+            # Calculate current board features
+            curr_features = calculate_board_features(game.board.grid)
+            
+            if self.prev_board_features is None:
+                # First state, no reward calculation
+                self.prev_board_features = curr_features
+                return 0
+            
+            # Calculate comprehensive reward
+            reward = calculate_tetris_reward(
+                self.prev_board_features, 
+                curr_features, 
+                lines_cleared, 
+                game_over
+            )
+            
+            # Update previous features
+            self.prev_board_features = curr_features
+            return reward
+        else:
+            # Original reward system for linear model
+            reward = 0
+            if lines_cleared > 0:
+                reward += game.score_board.score / 5
+            if game_over:
+                reward -= 10
+                reward -= 0.1 * game.board.highest_column_height()
+                reward -= 0.5 * game.board.count_new_zeros()
+            return reward
         """Get state representation - visual for CNN, feature-based for linear model"""
         if self.use_cnn:
             # Create 4-channel board tensor
@@ -201,11 +244,11 @@ class Agent:
         self.trainer.train_step(state, action, reward, next_state, game_over)
 
     def get_action(self, state):
-        # self.epsilon = HYPERPARAMETER_EXPLORATION_RATE - (self.n_games ** 2 / 200)
-        self.epsilon = HYPERPARAMETER_EXPLORATION_RATE - self.n_games
+        # Improved epsilon decay - slower decay for more exploration
+        self.epsilon = max(10, HYPERPARAMETER_EXPLORATION_RATE - self.n_games * 0.5)
         final_move = [0, 0, 0, 0, 0, 0, 0]
         
-        if random.randint(0, 400) < self.epsilon:
+        if random.randint(0, 1000) < self.epsilon:
             move = random.randint(0, 6)
             final_move[move] = 1
         else:
@@ -242,11 +285,21 @@ def train():
     game = TetrisAI()
     
     print(f"Training with {'CNN' if agent.use_cnn else 'Linear'} model")
+    print(f"Learning rate: {agent.trainer.learning_rate}")
+    print(f"Batch size: {BATCH_SIZE}")
     
     while True:
         state_old = agent.get_state(game)
         final_move = agent.get_action(state_old)
-        reward, done, score = game.play_step(final_move)
+        
+        # Store lines cleared before action
+        lines_before = game.score_board.lines_cleared
+        reward_raw, done, score = game.play_step(final_move)
+        lines_after = game.score_board.lines_cleared
+        lines_cleared = lines_after - lines_before
+        
+        # Calculate improved reward
+        reward = agent.get_reward(game, lines_cleared, done)
 
         state_new = agent.get_state(game)
         agent.train_short_memory(state_old, final_move, reward, state_new, done)
@@ -256,13 +309,14 @@ def train():
         if done:
             game.reset()
             agent.n_games += 1
+            agent.prev_board_features = None  # Reset for new game
             agent.train_long_memory()
 
             if score > record:
                 record = score
                 agent.model.save()
 
-            print(f'GAME: {agent.n_games}\nSCORE: {score}\nBEST SCORE: {record}\nREWARD: {reward}')
+            print(f'GAME: {agent.n_games}\nSCORE: {score}\nBEST SCORE: {record}\nREWARD: {reward:.2f}\nEPSILON: {agent.epsilon:.1f}')
 
             plot_scores.append(score)
             total_score += score
