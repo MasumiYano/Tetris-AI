@@ -8,7 +8,7 @@ from collections import deque
 # Importing from folder
 from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
-from model import LinearQNet, QTrainer
+from model import ConvQNet, QTrainer
 from helper import plot
 from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPERPARAMETER_EXPLORATION_RATE)
 
@@ -21,6 +21,8 @@ def calculate_bumpiness(arr):
 
 def block_type(block):
     arr = [0] * 7
+    if block is None:
+        return arr
     if isinstance(block, IBlock):
         arr[0] = 1
     elif isinstance(block, JBlock):
@@ -53,34 +55,135 @@ def flatten_array(arr):
     return flat_list
 
 
+def create_board_tensor(game):
+    """Create a 4-channel visual representation of the game state"""
+    tensor = np.zeros((4, 22, 10), dtype=np.float32)
+    
+    # Channel 0: Board state (normalize block types to 0-1 range)
+    board_grid = np.array(game.board.grid, dtype=np.float32)
+    tensor[0] = board_grid / 7.0  # Normalize block types (1-7) to roughly 0-1
+    
+    # Channel 1: Current piece position
+    current_piece_grid = add_piece_to_grid(game.active_block, game.board.grid)
+    tensor[1] = current_piece_grid
+    
+    # Channel 2: Ghost piece position
+    ghost_piece_grid = add_ghost_piece_to_grid(game.active_block, game.board.grid)
+    tensor[2] = ghost_piece_grid
+    
+    # Channel 3: Boundaries (walls and floor)
+    tensor[3] = create_boundary_mask()
+    
+    return tensor
+
+
+def add_piece_to_grid(block, board_grid):
+    """Add current piece to a copy of the board grid"""
+    grid = np.zeros((22, 10), dtype=np.float32)
+    block_grid = block.get_block_grid()
+    
+    for y in range(len(block_grid)):
+        for x in range(len(block_grid[0])):
+            if block_grid[y][x] > 0:
+                grid_y = block.grid_y + y
+                grid_x = block.grid_x + x
+                if 0 <= grid_y < 22 and 0 <= grid_x < 10:
+                    grid[grid_y][grid_x] = 1.0
+    
+    return grid
+
+
+def add_ghost_piece_to_grid(block, board_grid):
+    """Add ghost piece to a copy of the board grid"""
+    grid = np.zeros((22, 10), dtype=np.float32)
+    
+    # Find ghost piece position
+    ghost_y = None
+    block_grid = block.get_block_grid()
+    for i in range(1, 50):
+        if not block.can_move(block.grid_x, block.grid_y + i, block_grid):
+            ghost_y = block.grid_y + i - 1
+            break
+    
+    if ghost_y is not None:
+        for y in range(len(block_grid)):
+            for x in range(len(block_grid[0])):
+                if block_grid[y][x] > 0:
+                    grid_y = ghost_y + y
+                    grid_x = block.grid_x + x
+                    if 0 <= grid_y < 22 and 0 <= grid_x < 10:
+                        grid[grid_y][grid_x] = 1.0
+    
+    return grid
+
+
+def create_boundary_mask():
+    """Create boundary mask showing walls and floor"""
+    mask = np.zeros((22, 10), dtype=np.float32)
+    
+    # Mark boundaries (this could be used to help the CNN understand game constraints)
+    # For now, we'll mark the bottom row and maybe use it for edge detection
+    mask[21, :] = 1.0  # Bottom boundary
+    
+    return mask
+
+
 class Agent:
-    def __init__(self):
+    def __init__(self, use_cnn=True):
         self.n_games = 0
         self.epsilon = 0
         self.gamma = GAMMA
         self.memory = deque(maxlen=MAX_MEMORY)
-        self.model = LinearQNet(33, 590, 7)
+        self.use_cnn = use_cnn
+        
+        if use_cnn:
+            # Use new CNN model
+            self.model = ConvQNet(additional_features_size=17, output_size=7)
+        else:
+            # Use original linear model for comparison
+            from model import LinearQNet
+            self.model = LinearQNet(33, 590, 7)
+            
         self.trainer = QTrainer(self.model, learning_rate=LR, gamma=self.gamma)
 
     def get_state(self, game):
-        height = game.get_board_height()
-        holes = game.get_holes()
-        bumpiness = calculate_bumpiness(height)
-        current_piece = block_type(game.active_block)
-        piece_rotation = get_rotation(game.active_block.rotation_index)
-        x_coordinate = game.active_block.grid_x
-        lines_cleared = game.prev_line_cleared
-        total_score = game.score_board.score
-        hold_piece_type = block_type(game.hold_box.block)
+        """Get state representation - visual for CNN, feature-based for linear model"""
+        if self.use_cnn:
+            # Create 4-channel board tensor
+            board_tensor = create_board_tensor(game)
+            
+            # Additional features that don't fit well in the visual representation
+            next_piece = block_type(game.next_blocks.next_blocks[0])  # 7-dim
+            hold_piece = block_type(game.hold_box.block)  # 7-dim
+            game_context = [
+                game.prev_line_cleared,
+                game.score_board.score / 1000.0,  # Normalize score
+                game.active_block.grid_x / 10.0   # Normalize x position
+            ]  # 3-dim
+            
+            additional_features = np.array(next_piece + hold_piece + game_context, dtype=np.float32)
+            
+            return (board_tensor, additional_features)
+        else:
+            # Original feature-based state for linear model
+            height = game.get_board_height()
+            holes = game.get_holes()
+            bumpiness = calculate_bumpiness(height)
+            current_piece = block_type(game.active_block)
+            piece_rotation = get_rotation(game.active_block.rotation_index)
+            x_coordinate = game.active_block.grid_x
+            lines_cleared = game.prev_line_cleared
+            total_score = game.score_board.score
+            hold_piece_type = block_type(game.hold_box.block)
 
-        state = [
-            height, holes, bumpiness, current_piece,
-            piece_rotation, x_coordinate, lines_cleared,
-            total_score, hold_piece_type
-        ]
+            state = [
+                height, holes, bumpiness, current_piece,
+                piece_rotation, x_coordinate, lines_cleared,
+                total_score, hold_piece_type
+            ]
 
-        flatten_state = flatten_array(state)
-        return np.array(flatten_state, dtype=int)
+            flatten_state = flatten_array(state)
+            return np.array(flatten_state, dtype=int)
 
     def remember(self, state, action, reward, next_state, game_over):
         self.memory.append((state, action, reward, next_state, game_over))
@@ -88,12 +191,11 @@ class Agent:
     def train_long_memory(self):
         if len(self.memory) > BATCH_SIZE:
             mini_sample = random.sample(self.memory, BATCH_SIZE)
-
         else:
             mini_sample = self.memory
 
-        states, actions, rewards, next_steps, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_steps, dones)
+        states, actions, rewards, next_states, dones = zip(*mini_sample)
+        self.trainer.train_step(states, actions, rewards, next_states, dones)
 
     def train_short_memory(self, state, action, reward, next_state, game_over):
         self.trainer.train_step(state, action, reward, next_state, game_over)
@@ -102,14 +204,29 @@ class Agent:
         # self.epsilon = HYPERPARAMETER_EXPLORATION_RATE - (self.n_games ** 2 / 200)
         self.epsilon = HYPERPARAMETER_EXPLORATION_RATE - self.n_games
         final_move = [0, 0, 0, 0, 0, 0, 0]
+        
         if random.randint(0, 400) < self.epsilon:
             move = random.randint(0, 6)
             final_move[move] = 1
         else:
-            state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
-            move = torch.argmax(prediction).item()
-            final_move[move] = 1
+            if self.use_cnn:
+                # Unpack state tuple for CNN
+                board_tensor, additional_features = state
+                
+                # Convert to tensors
+                board_tensor = torch.tensor(board_tensor, dtype=torch.float).unsqueeze(0)  # Add batch dim
+                additional_features = torch.tensor(additional_features, dtype=torch.float).unsqueeze(0)  # Add batch dim
+                
+                # Get prediction from CNN model
+                prediction = self.model(board_tensor, additional_features)
+                move = torch.argmax(prediction).item()
+                final_move[move] = 1
+            else:
+                # Original linear model approach
+                state0 = torch.tensor(state, dtype=torch.float)
+                prediction = self.model(state0)
+                move = torch.argmax(prediction).item()
+                final_move[move] = 1
 
         return final_move
 
@@ -119,8 +236,13 @@ def train():
     plot_mean_score = []
     total_score = 0
     record = 0
-    agent = Agent()
+    
+    # Set use_cnn=True for CNN model, use_cnn=False for original linear model
+    agent = Agent(use_cnn=True)
     game = TetrisAI()
+    
+    print(f"Training with {'CNN' if agent.use_cnn else 'Linear'} model")
+    
     while True:
         state_old = agent.get_state(game)
         final_move = agent.get_action(state_old)
