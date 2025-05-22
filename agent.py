@@ -11,6 +11,7 @@ from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
 from model import ConvQNet, QTrainer
 from helper import plot
 from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPERPARAMETER_EXPLORATION_RATE)
+import random
 
 
 def calculate_bumpiness(arr):
@@ -136,6 +137,9 @@ class Agent:
         self.memory = deque(maxlen=MAX_MEMORY)
         self.use_cnn = use_cnn
         
+        # Track board features for reward calculation
+        self.prev_board_features = None
+        
         if use_cnn:
             # Use new CNN model with lower learning rate
             self.model = ConvQNet(additional_features_size=17, output_size=7)
@@ -158,38 +162,7 @@ class Agent:
             
         self.trainer = QTrainer(self.model, learning_rate=lr, gamma=self.gamma)
 
-    def get_reward(self, game, lines_cleared, game_over):
-        """Calculate reward using improved reward shaping"""
-        if self.use_cnn:
-            # Calculate current board features
-            curr_features = calculate_board_features(game.board.grid)
-            
-            if self.prev_board_features is None:
-                # First state, no reward calculation
-                self.prev_board_features = curr_features
-                return 0
-            
-            # Calculate comprehensive reward
-            reward = calculate_tetris_reward(
-                self.prev_board_features, 
-                curr_features, 
-                lines_cleared, 
-                game_over
-            )
-            
-            # Update previous features
-            self.prev_board_features = curr_features
-            return reward
-        else:
-            # Original reward system for linear model
-            reward = 0
-            if lines_cleared > 0:
-                reward += game.score_board.score / 5
-            if game_over:
-                reward -= 10
-                reward -= 0.1 * game.board.highest_column_height()
-                reward -= 0.5 * game.board.count_new_zeros()
-            return reward
+    def get_state(self, game):
         """Get state representation - visual for CNN, feature-based for linear model"""
         if self.use_cnn:
             # Create 4-channel board tensor
@@ -227,6 +200,39 @@ class Agent:
 
             flatten_state = flatten_array(state)
             return np.array(flatten_state, dtype=int)
+
+    def get_reward(self, game, lines_cleared, game_over):
+        """Calculate reward using improved reward shaping"""
+        if self.use_cnn:
+            # Calculate current board features
+            curr_features = calculate_board_features(game.board.grid)
+            
+            if self.prev_board_features is None:
+                # First state, no reward calculation
+                self.prev_board_features = curr_features
+                return 0
+            
+            # Calculate comprehensive reward
+            reward = calculate_tetris_reward(
+                self.prev_board_features, 
+                curr_features, 
+                lines_cleared, 
+                game_over
+            )
+            
+            # Update previous features
+            self.prev_board_features = curr_features
+            return reward
+        else:
+            # Original reward system for linear model
+            reward = 0
+            if lines_cleared > 0:
+                reward += game.score_board.score / 5
+            if game_over:
+                reward -= 10
+                reward -= 0.1 * game.board.highest_column_height()
+                reward -= 0.5 * game.board.count_new_zeros()
+            return reward
 
     def remember(self, state, action, reward, next_state, game_over):
         self.memory.append((state, action, reward, next_state, game_over))
