@@ -2,7 +2,7 @@ import math
 
 import pygame
 
-from game.Block import Block
+from game.Block import Block, IBlock, OBlock
 from game.Board import Board
 from game.HoldBox import HoldBox
 from game.NextBlocks import NextBlocks
@@ -237,3 +237,112 @@ class TetrisAI:
 
     def get_holes(self):
         return self.board.count_new_zeros()
+
+    def get_next_states(self):
+        """Get all possible final states for the current piece"""
+        states = {}
+        current_piece = self.active_block
+        
+        # Try all possible rotations for this piece type
+        possible_rotations = self._get_possible_rotations(current_piece)
+        
+        for target_rotation in possible_rotations:
+            # Create a temporary piece at each rotation
+            temp_piece = self._create_temp_piece(current_piece, target_rotation)
+            
+            # Try all possible x positions for this rotation
+            piece_grid = temp_piece.get_block_grid()
+            min_x = min([x for y in range(len(piece_grid)) for x in range(len(piece_grid[0])) if piece_grid[y][x] > 0])
+            max_x = max([x for y in range(len(piece_grid)) for x in range(len(piece_grid[0])) if piece_grid[y][x] > 0])
+            
+            # Try each valid x position
+            for x_pos in range(-min_x, 10 - max_x):
+                # Simulate dropping the piece at this position
+                final_state = self._simulate_piece_placement(temp_piece, x_pos, target_rotation)
+                if final_state is not None:
+                    states[(x_pos, target_rotation)] = final_state
+        
+        return states
+    
+    def _get_possible_rotations(self, piece):
+        """Get all valid rotations for a piece type"""
+        if isinstance(piece, OBlock):  # O piece - no rotation needed
+            return [0]
+        elif isinstance(piece, IBlock):  # I piece - only 2 unique rotations
+            return [0, 1]
+        else:  # All other pieces - 4 rotations
+            return [0, 1, 2, 3]
+    
+    def _create_temp_piece(self, original_piece, target_rotation):
+        """Create a temporary piece with the specified rotation"""
+        # Create new piece of same type
+        piece_type = type(original_piece)
+        temp_piece = piece_type(self.board, self.screen)
+        temp_piece.rotation_index = target_rotation
+        temp_piece.grid_x = 3  # Start at center
+        temp_piece.grid_y = 0  # Start at top
+        return temp_piece
+    
+    def _simulate_piece_placement(self, piece, x_pos, rotation):
+        """Simulate placing a piece and return the resulting game state"""
+        # Set piece position and rotation
+        piece.grid_x = x_pos
+        piece.grid_y = 0
+        piece.rotation_index = rotation
+        
+        # Drop the piece to its final position
+        while piece.can_move(piece.grid_x, piece.grid_y + 1, piece.get_block_grid()):
+            piece.grid_y += 1
+        
+        # Check if placement is valid (piece must be at least partially visible)
+        if piece.grid_y < 0:
+            return None
+        
+        # Create a copy of the current board
+        temp_board_grid = [row[:] for row in self.board.grid]
+        
+        # Add the piece to the temporary board
+        block_grid = piece.get_block_grid()
+        for y in range(len(block_grid)):
+            for x in range(len(block_grid[0])):
+                if block_grid[y][x] > 0:
+                    board_y = piece.grid_y + y
+                    board_x = piece.grid_x + x
+                    if 0 <= board_y < 22 and 0 <= board_x < 10:
+                        temp_board_grid[board_y][board_x] = block_grid[y][x]
+        
+        # Clear lines in the temporary board
+        lines_cleared = 0
+        for row_idx in range(len(temp_board_grid) - 1, -1, -1):
+            if all(cell != 0 for cell in temp_board_grid[row_idx]):
+                temp_board_grid.pop(row_idx)
+                lines_cleared += 1
+        
+        # Add empty rows at the top
+        for _ in range(lines_cleared):
+            temp_board_grid.insert(0, [0] * 10)
+        
+        # Create a temporary game state for evaluation
+        temp_game_state = {
+            'board_grid': temp_board_grid,
+            'lines_cleared': lines_cleared,
+            'next_piece': self.next_blocks.next_blocks[0],
+            'hold_piece': self.hold_box.block,
+            'score': self.score_board.score + self._calculate_score_for_lines(lines_cleared)
+        }
+        
+        return temp_game_state
+    
+    def _calculate_score_for_lines(self, lines_cleared):
+        """Calculate score for clearing lines"""
+        if lines_cleared == 0:
+            return 0
+        elif lines_cleared == 1:
+            return 100 * self.score_board.level
+        elif lines_cleared == 2:
+            return 300 * self.score_board.level
+        elif lines_cleared == 3:
+            return 500 * self.score_board.level
+        elif lines_cleared == 4:
+            return 800 * self.score_board.level
+        return 0

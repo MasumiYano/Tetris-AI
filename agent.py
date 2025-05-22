@@ -4,6 +4,7 @@ from reward_system import calculate_board_features, calculate_tetris_reward
 import torch
 import numpy as np
 from collections import deque
+import random
 
 # Importing from folder
 from game.game_main import TetrisAI
@@ -321,8 +322,16 @@ class Agent:
                 best_placement = placement
         
         return best_placement
-        # Improved epsilon decay - slower decay for more exploration
+
+    def get_action(self, state, game=None):
+        # Update epsilon for exploration
         self.epsilon = max(10, HYPERPARAMETER_EXPLORATION_RATE - self.n_games * 0.5)
+        
+        # If game object is provided, use perfect information planning
+        if game is not None:
+            return self.get_perfect_action(game)
+        
+        # Fallback to original action selection
         final_move = [0, 0, 0, 0, 0, 0, 0]
         
         if random.randint(0, 1000) < self.epsilon:
@@ -334,8 +343,8 @@ class Agent:
                 board_tensor, additional_features = state
                 
                 # Convert to tensors
-                board_tensor = torch.tensor(board_tensor, dtype=torch.float).unsqueeze(0)  # Add batch dim
-                additional_features = torch.tensor(additional_features, dtype=torch.float).unsqueeze(0)  # Add batch dim
+                board_tensor = torch.tensor(board_tensor, dtype=torch.float).unsqueeze(0)
+                additional_features = torch.tensor(additional_features, dtype=torch.float).unsqueeze(0)
                 
                 # Get prediction from CNN model
                 prediction = self.model(board_tensor, additional_features)
@@ -349,6 +358,55 @@ class Agent:
                 final_move[move] = 1
 
         return final_move
+    
+    def get_perfect_action(self, game):
+        """Use perfect information to find the best action sequence"""
+        # Get all possible final states
+        next_states = game.get_next_states()
+        
+        if not next_states:
+            # Fallback to hard drop if no valid moves
+            return [0, 0, 0, 0, 0, 1, 0]
+        
+        # Find the best placement
+        best_placement = self.best_state(next_states)
+        
+        if best_placement is None:
+            return [0, 0, 0, 0, 0, 1, 0]
+        
+        target_x, target_rotation = best_placement
+        
+        # Convert the target placement into action sequence
+        return self._convert_placement_to_action(game, target_x, target_rotation)
+    
+    def _convert_placement_to_action(self, game, target_x, target_rotation):
+        """Convert target placement to action sequence"""
+        current_piece = game.active_block
+        current_x = current_piece.grid_x
+        current_rotation = current_piece.rotation_index
+        
+        # For simplicity, we'll just return the action that gets us closest to target
+        # Priority: rotation first, then movement, then drop
+        
+        # Check if we need to rotate
+        if current_rotation != target_rotation:
+            # Calculate shortest rotation path
+            rotation_diff = (target_rotation - current_rotation) % 4
+            if rotation_diff == 1 or rotation_diff == -3:
+                return [0, 0, 0, 1, 0, 0, 0]  # Rotate CW
+            elif rotation_diff == 3 or rotation_diff == -1:
+                return [0, 0, 0, 0, 1, 0, 0]  # Rotate CCW
+            elif rotation_diff == 2:
+                return [0, 0, 0, 1, 0, 0, 0]  # Rotate CW (will need another rotation next step)
+        
+        # Check if we need to move horizontally
+        if current_x < target_x:
+            return [0, 0, 1, 0, 0, 0, 0]  # Move right
+        elif current_x > target_x:
+            return [0, 1, 0, 0, 0, 0, 0]  # Move left
+        
+        # If position and rotation are correct, hard drop
+        return [0, 0, 0, 0, 0, 1, 0]  # Hard drop
 
 
 def train():
