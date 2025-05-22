@@ -77,6 +77,31 @@ class LinearQNet(nn.Module):
         torch.save(self.state_dict(), file_name)
 
 
+class SimpleQNet(nn.Module):
+    """Single-value state evaluator like the working implementation"""
+    def __init__(self, input_size=4, hidden_size=256):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1)  # Single value output
+        )
+    
+    def forward(self, x):
+        return self.network(x)
+    
+    def save(self, file_name='simple_model.pth'):
+        model_folder_path = './model'
+        if not os.path.exists(model_folder_path):
+            os.makedirs(model_folder_path)
+        file_name = os.path.join(model_folder_path, file_name)
+        torch.save(self.state_dict(), file_name)
+
+
 class QTrainer:
     def __init__(self, model, learning_rate, gamma):
         self.learning_rate = learning_rate
@@ -158,6 +183,43 @@ class QTrainer:
                 target[idx][torch.argmax(action[idx]).item()] = Q_new
 
         # Perform optimization step
+        self.optimizer.zero_grad()
+        loss = self.criterion(target, pred)
+        loss.backward()
+        self.optimizer.step()
+
+
+class SimpleQTrainer:
+    """Trainer for single-value state evaluation"""
+    def __init__(self, model, learning_rate, gamma):
+        self.learning_rate = learning_rate
+        self.gamma = gamma
+        self.model = model
+        self.optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        self.criterion = nn.MSELoss()
+
+    def train_step(self, state, reward, next_state, done):
+        # Handle both single and batch training
+        state = torch.tensor(state, dtype=torch.float)
+        next_state = torch.tensor(next_state, dtype=torch.float)
+        reward = torch.tensor(reward, dtype=torch.float)
+
+        if len(state.shape) == 1:
+            state = torch.unsqueeze(state, 0)
+            next_state = torch.unsqueeze(next_state, 0)
+            reward = torch.unsqueeze(reward, 0)
+            done = (done, )
+
+        # Q-learning update for state values
+        pred = self.model(state)
+        target = pred.clone()
+
+        for idx in range(len(done)):
+            Q_new = reward[idx]
+            if not done[idx]:
+                Q_new = reward[idx] + self.gamma * self.model(next_state[idx:idx+1]).item()
+            target[idx] = Q_new
+
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
         loss.backward()

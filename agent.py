@@ -9,9 +9,10 @@ import random
 # Importing from folder
 from game.game_main import TetrisAI
 from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
-from model import ConvQNet, QTrainer
+from model import ConvQNet, QTrainer, SimpleQNet, SimpleQTrainer
 from helper import plot
-from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPERPARAMETER_EXPLORATION_RATE)
+from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPERPARAMETER_EXPLORATION_RATE, 
+                   USE_SIMPLE_STATE, SIMPLE_STATE_SIZE, SIMPLE_LR)
 
 
 def calculate_bumpiness(arr):
@@ -130,17 +131,22 @@ def create_boundary_mask():
 
 
 class Agent:
-    def __init__(self, use_cnn=True):
+    def __init__(self, use_cnn=True, use_simple=False):
         self.n_games = 0
         self.epsilon = 0
         self.gamma = GAMMA
         self.memory = deque(maxlen=MAX_MEMORY)
         self.use_cnn = use_cnn
+        self.use_simple = use_simple  # New flag for simple mode
         
         # Track board features for reward calculation
         self.prev_board_features = None
         
-        if use_cnn:
+        if use_simple:
+            # Use simple single-value model
+            self.model = SimpleQNet(input_size=SIMPLE_STATE_SIZE)
+            self.trainer = SimpleQTrainer(self.model, learning_rate=SIMPLE_LR, gamma=self.gamma)
+        elif use_cnn:
             # Use new CNN model with lower learning rate
             self.model = ConvQNet(additional_features_size=17, output_size=7)
             # Use CNN-specific learning rate if available, otherwise use main LR
@@ -149,6 +155,7 @@ class Agent:
                 lr = CNN_LR
             except ImportError:
                 lr = LR
+            self.trainer = QTrainer(self.model, learning_rate=lr, gamma=self.gamma)
         else:
             # Use original linear model for comparison
             from model import LinearQNet
@@ -159,12 +166,23 @@ class Agent:
                 lr = LINEAR_LR
             except ImportError:
                 lr = LR
-            
-        self.trainer = QTrainer(self.model, learning_rate=lr, gamma=self.gamma)
+            self.trainer = QTrainer(self.model, learning_rate=lr, gamma=self.gamma)
+
+    def get_simple_state(self, game):
+        """Get simplified 4-feature state representation"""
+        height = game.get_board_height()
+        holes = game.get_holes() 
+        bumpiness = calculate_bumpiness(height)
+        lines_cleared = game.prev_line_cleared
+        sum_height = sum(height)
+        
+        return np.array([lines_cleared, holes, bumpiness, sum_height], dtype=np.float32)
 
     def get_state(self, game):
-        """Get state representation - visual for CNN, feature-based for linear model"""
-        if self.use_cnn:
+        """Get state representation based on mode"""
+        if self.use_simple:
+            return self.get_simple_state(game)
+        elif self.use_cnn:
             # Create 4-channel board tensor
             board_tensor = create_board_tensor(game)
             
@@ -202,8 +220,19 @@ class Agent:
             return np.array(flatten_state, dtype=int)
 
     def get_reward(self, game, lines_cleared, game_over):
-        """Calculate reward using improved reward shaping"""
-        if self.use_cnn:
+        """Calculate reward based on mode"""
+        if self.use_simple:
+            # Simple reward like the working implementation
+            reward = 1  # Base reward for placing piece
+            
+            if lines_cleared > 0:
+                reward += (lines_cleared ** 2) * 10  # Quadratic bonus for lines
+            
+            if game_over:
+                reward -= 2  # Simple penalty
+            
+            return reward
+        elif self.use_cnn:
             # Calculate current board features
             curr_features = calculate_board_features(game.board.grid)
             
@@ -234,8 +263,14 @@ class Agent:
                 reward -= 0.5 * game.board.count_new_zeros()
             return reward
 
-    def remember(self, state, action, reward, next_state, game_over):
-        self.memory.append((state, action, reward, next_state, game_over))
+    def remember(self, state, action_or_reward, reward_or_next_state, next_state_or_done, done=None):
+        """Modified to handle both action-based and state-based learning"""
+        if self.use_simple:
+            # For simple mode: (state, reward, next_state, done)
+            self.memory.append((state, action_or_reward, reward_or_next_state, next_state_or_done))
+        else:
+            # For existing modes: (state, action, reward, next_state, done)
+            self.memory.append((state, action_or_reward, reward_or_next_state, next_state_or_done, done))
 
     def train_long_memory(self):
         if len(self.memory) > BATCH_SIZE:
@@ -243,15 +278,68 @@ class Agent:
         else:
             mini_sample = self.memory
 
-        states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
+        if self.use_simple:
+            states, rewards, next_states, dones = zip(*mini_sample)
+            self.trainer.train_step(states, rewards, next_states, dones)
+        else:
+            states, actions, rewards, next_states, dones = zip(*mini_sample)
+            self.trainer.train_step(states, actions, rewards, next_states, dones)
 
-    def train_short_memory(self, state, action, reward, next_state, game_over):
-        self.trainer.train_step(state, action, reward, next_state, game_over)
+    def train_short_memory(self, state, action_or_reward, reward_or_next_state, next_state_or_done, done=None):
+        if self.use_simple:
+            self.trainer.train_step(state, action_or_reward, reward_or_next_state, next_state_or_done)
+        else:
+            self.trainer.train_step(state, action_or_reward, reward_or_next_state, next_state_or_done, done)
+
+    def _extract_simple_features(self, temp_game_state):
+        """Extract 4 simple features from temporary game state"""
+        board_grid = temp_game_state['board_grid']
+        
+        # Calculate heights
+        heights = []
+        for col in range(10):
+            height = 0
+            for row in range(22):
+                if board_grid[row][col] != 0:
+                    height = 22 - row
+                    break
+            heights.append(height)
+        
+        # Calculate holes
+        holes = 0
+        for col in range(10):
+            block_found = False
+            for row in range(22):
+                if board_grid[row][col] != 0:
+                    block_found = True
+                elif block_found:
+                    holes += 1
+        
+        # Calculate bumpiness
+        bumpiness = sum(abs(heights[i] - heights[i+1]) for i in range(9))
+        
+        return np.array([
+            temp_game_state['lines_cleared'], 
+            holes, 
+            bumpiness, 
+            sum(heights)
+        ], dtype=np.float32)
+
+    def evaluate_simple_state(self, temp_game_state):
+        """Evaluate temporary state using simple 4-feature approach"""
+        simple_features = self._extract_simple_features(temp_game_state)
+        state_tensor = torch.tensor(simple_features, dtype=torch.float).unsqueeze(0)
+        
+        with torch.no_grad():
+            state_value = self.model(state_tensor).item()
+        
+        return state_value
 
     def evaluate_state(self, temp_game_state):
         """Evaluate a temporary game state using the CNN"""
-        if not self.use_cnn:
+        if self.use_simple:
+            return self.evaluate_simple_state(temp_game_state)
+        elif not self.use_cnn:
             # For linear model, we'd need to implement feature extraction for temp state
             # For now, return random value as fallback
             return random.random()
@@ -315,7 +403,10 @@ class Agent:
         
         # Evaluate each possible state
         for placement, temp_game_state in next_states.items():
-            state_value = self.evaluate_state(temp_game_state)
+            if self.use_simple:
+                state_value = self.evaluate_simple_state(temp_game_state)
+            else:
+                state_value = self.evaluate_state(temp_game_state)
             
             if state_value > best_value:
                 best_value = state_value
@@ -350,6 +441,10 @@ class Agent:
                 prediction = self.model(board_tensor, additional_features)
                 move = torch.argmax(prediction).item()
                 final_move[move] = 1
+            elif self.use_simple:
+                # Simple model doesn't use actions directly - this shouldn't be called
+                # But if it is, just hard drop
+                final_move[5] = 1  # Hard drop
             else:
                 # Original linear model approach
                 state0 = torch.tensor(state, dtype=torch.float)
@@ -415,11 +510,12 @@ def train():
     total_score = 0
     record = 0
     
-    # Set use_cnn=True for CNN model, use_cnn=False for original linear model
-    agent = Agent(use_cnn=True)
+    # Choose mode - start with simple to test
+    agent = Agent(use_cnn=False, use_simple=USE_SIMPLE_STATE)
     game = TetrisAI()
     
-    print(f"Training with {'CNN' if agent.use_cnn else 'Linear'} model")
+    model_type = 'Simple' if agent.use_simple else ('CNN' if agent.use_cnn else 'Linear')
+    print(f"Training with {model_type} model")
     print(f"Learning rate: {agent.trainer.learning_rate}")
     print(f"Batch size: {BATCH_SIZE}")
     print("Using Perfect Information Planning!")
@@ -436,18 +532,23 @@ def train():
         lines_after = game.score_board.lines_cleared
         lines_cleared = lines_after - lines_before
         
-        # Calculate improved reward
+        # Calculate reward based on model type
         reward = agent.get_reward(game, lines_cleared, done)
 
         state_new = agent.get_state(game)
-        agent.train_short_memory(state_old, final_move, reward, state_new, done)
-
-        agent.remember(state_old, final_move, reward, state_new, done)
+        
+        if agent.use_simple:
+            agent.train_short_memory(state_old, reward, state_new, done)
+            agent.remember(state_old, reward, state_new, done)
+        else:
+            agent.train_short_memory(state_old, final_move, reward, state_new, done)
+            agent.remember(state_old, final_move, reward, state_new, done)
 
         if done:
             game.reset()
             agent.n_games += 1
-            agent.prev_board_features = None  # Reset for new game
+            if agent.use_cnn:
+                agent.prev_board_features = None  # Reset for new game
             agent.train_long_memory()
 
             if score > record:
