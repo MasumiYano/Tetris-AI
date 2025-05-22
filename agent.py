@@ -11,7 +11,6 @@ from game.Block import (IBlock, JBlock, LBlock, OBlock, SBlock, TBlock, ZBlock)
 from model import ConvQNet, QTrainer
 from helper import plot
 from config import (MAX_MEMORY, BATCH_SIZE, LR, GAMMA, HYPERPARAMETER_EXPLORATION_RATE)
-import random
 
 
 def calculate_bumpiness(arr):
@@ -249,7 +248,79 @@ class Agent:
     def train_short_memory(self, state, action, reward, next_state, game_over):
         self.trainer.train_step(state, action, reward, next_state, game_over)
 
-    def get_action(self, state):
+    def evaluate_state(self, temp_game_state):
+        """Evaluate a temporary game state using the CNN"""
+        if not self.use_cnn:
+            # For linear model, we'd need to implement feature extraction for temp state
+            # For now, return random value as fallback
+            return random.random()
+        
+        # Create board tensor from temporary state
+        board_tensor = self._create_board_tensor_from_temp_state(temp_game_state)
+        
+        # Create additional features
+        next_piece = block_type(temp_game_state['next_piece'])
+        hold_piece = block_type(temp_game_state['hold_piece'])
+        game_context = [
+            temp_game_state['lines_cleared'],
+            temp_game_state['score'] / 1000.0,
+            5.0 / 10.0  # Default x position (middle)
+        ]
+        
+        additional_features = np.array(next_piece + hold_piece + game_context, dtype=np.float32)
+        
+        # Convert to tensors and evaluate
+        board_tensor = torch.tensor(board_tensor, dtype=torch.float).unsqueeze(0)
+        additional_features = torch.tensor(additional_features, dtype=torch.float).unsqueeze(0)
+        
+        with torch.no_grad():
+            prediction = self.model(board_tensor, additional_features)
+            # Take max of the 7 outputs as state value
+            state_value = torch.max(prediction).item()
+        
+        return state_value
+    
+    def _create_board_tensor_from_temp_state(self, temp_game_state):
+        """Create board tensor from temporary game state"""
+        tensor = np.zeros((4, 22, 10), dtype=np.float32)
+        
+        # Channel 0: Board state
+        board_grid = np.array(temp_game_state['board_grid'], dtype=np.float32)
+        tensor[0] = board_grid / 7.0
+        
+        # Channel 1: Next piece (we'll place it at default position for evaluation)
+        # For simplicity, we'll leave this empty since we're evaluating the board after placement
+        tensor[1] = np.zeros((22, 10), dtype=np.float32)
+        
+        # Channel 2: Ghost piece (empty for temp state)
+        tensor[2] = np.zeros((22, 10), dtype=np.float32)
+        
+        # Channel 3: Boundaries
+        tensor[3] = create_boundary_mask()
+        
+        return tensor
+
+    def best_state(self, next_states):
+        """Find the best state from all possible next states"""
+        if not next_states:
+            return None
+        
+        best_placement = None
+        best_value = float('-inf')
+        
+        # Add some randomness during exploration
+        if random.randint(0, 1000) < self.epsilon:
+            return random.choice(list(next_states.keys()))
+        
+        # Evaluate each possible state
+        for placement, temp_game_state in next_states.items():
+            state_value = self.evaluate_state(temp_game_state)
+            
+            if state_value > best_value:
+                best_value = state_value
+                best_placement = placement
+        
+        return best_placement
         # Improved epsilon decay - slower decay for more exploration
         self.epsilon = max(10, HYPERPARAMETER_EXPLORATION_RATE - self.n_games * 0.5)
         final_move = [0, 0, 0, 0, 0, 0, 0]
@@ -293,10 +364,13 @@ def train():
     print(f"Training with {'CNN' if agent.use_cnn else 'Linear'} model")
     print(f"Learning rate: {agent.trainer.learning_rate}")
     print(f"Batch size: {BATCH_SIZE}")
+    print("Using Perfect Information Planning!")
     
     while True:
         state_old = agent.get_state(game)
-        final_move = agent.get_action(state_old)
+        
+        # Use perfect information planning to get action
+        final_move = agent.get_action(state_old, game=game)
         
         # Store lines cleared before action
         lines_before = game.score_board.lines_cleared
